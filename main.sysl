@@ -1,0 +1,258 @@
+// One drawing, four backends — the worked example for `sh.sysl.cairo`.
+//
+// `draw` is written once and knows nothing about where it is going. It is called four times: onto
+// pixels, onto a PDF page, onto an SVG and onto a PostScript page. **That is cairo's whole idea**,
+// and a demo that only wrote a PNG would be showing off the least interesting half of it.
+//
+//     sysl run . --link-path /opt/homebrew/lib
+//
+// Nothing here is read from disk. The chart's numbers are in the source, the font is whatever the
+// system calls "sans", and the only files touched are the four this writes.
+
+import sh.sysl.cairo.*
+import sysl.math.pi
+
+const WIDTH: real = 640.0
+const HEIGHT: real = 400.0
+
+// The plot area, inset from the page.
+const LEFT: real = 70.0
+const RIGHT: real = 600.0
+const TOP: real = 110.0
+const BOTTOM: real = 330.0
+
+// Put `text` down with its centre at `x`, rather than its left edge.
+centred(cr: Context, text: string, x: real, y: real)
+    var c = cr
+    val e = c.text_extents(text)
+
+    c.move_to(x - e.width / 2.0 - e.x_bearing, y)
+    c.show_text(text)
+end centred
+
+// Put `text` down with its right edge at `x`.
+right_aligned(cr: Context, text: string, x: real, y: real)
+    var c = cr
+    val e = c.text_extents(text)
+
+    c.move_to(x - e.width - e.x_bearing, y)
+    c.show_text(text)
+end right_aligned
+
+// A rectangle whose corners are rounded by `r`, added to the current path.
+rounded_rect(cr: Context, x: real, y: real, w: real, h: real, r: real)
+    var c = cr
+    val half = pi / 2.0
+
+    c.new_sub_path()
+    c.arc(x + w - r, y + r, r, -half, 0.0)
+    c.arc(x + w - r, y + h - r, r, 0.0, half)
+    c.arc(x + r, y + h - r, r, half, pi)
+    c.arc(x + r, y + r, r, pi, 3.0 * half)
+    c.close_path()
+end rounded_rect
+
+// The whole picture. **It is handed a context and never asks what is underneath it** — this same
+// function draws the PNG, the PDF, the SVG and the PostScript page.
+//
+// The context is copied into a `var` because the methods that change it take `*self`; a `Context` is
+// one pointer wide, so the copy is free and both names refer to the same drawing state.
+draw(context_in: Context)
+    var cr = context_in
+
+    // What is being drawn. A demo with data in it is a demo somebody can read. These are `val`s in
+    // here rather than module `const`s because an array literal is not a constant expression.
+    val labels = ["qcbor", "regex", "table", "sdl3", "plutovg", "sqlite", "cairo"]
+    val values = [0.42, 0.55, 0.38, 0.86, 0.61, 0.71, 0.94]
+
+    // ---- the background: a gradient, corner to corner ----
+
+    var sky = linear_pattern(0.0, 0.0, 0.0, HEIGHT)
+
+    sky.add_color_stop_rgb(0.0, 0.09, 0.11, 0.18)
+    sky.add_color_stop_rgb(1.0, 0.16, 0.19, 0.29)
+
+    cr.set_source(sky)
+    cr.paint()
+    sky.destroy()
+
+    // ---- a card to draw the chart on, with rounded corners and a soft edge ----
+
+    rounded_rect(cr, 24.0, 24.0, WIDTH - 48.0, HEIGHT - 48.0, 16.0)
+    cr.set_source_rgba(1.0, 1.0, 1.0, 0.05)
+    cr.fill_preserve()
+    cr.set_source_rgba(1.0, 1.0, 1.0, 0.18)
+    cr.set_line_width(1.0)
+    cr.stroke()
+
+    // ---- the words ----
+
+    cr.select_font_face("sans", FONT_SLANT_NORMAL, FONT_WEIGHT_BOLD)
+    cr.set_font_size(26.0)
+    cr.set_source_rgb(0.96, 0.97, 1.0)
+    cr.move_to(LEFT - 22.0, 62.0)
+    cr.show_text("One drawing, four backends")
+
+    cr.select_font_face("sans", FONT_SLANT_ITALIC, FONT_WEIGHT_NORMAL)
+    cr.set_font_size(13.0)
+    cr.set_source_rgba(0.96, 0.97, 1.0, 0.6)
+    cr.move_to(LEFT - 22.0, 84.0)
+    cr.show_text("drawn once by sh.sysl.cairo — to a PNG, a PDF, an SVG and a PostScript page")
+
+    // ---- the grid: dashed lines the labels hang off ----
+
+    val dashes = [3.0, 4.0]
+
+    cr.set_dash(dashes[0..<2], 0.0)
+    cr.set_line_width(1.0)
+    cr.select_font_face("sans", FONT_SLANT_NORMAL, FONT_WEIGHT_NORMAL)
+    cr.set_font_size(11.0)
+
+    for i in 0..<5
+        val frac = real(i) / 4.0
+        val y = BOTTOM - frac * (BOTTOM - TOP)
+
+        cr.set_source_rgba(1.0, 1.0, 1.0, 0.14)
+        cr.move_to(LEFT, y)
+        cr.line_to(RIGHT, y)
+        cr.stroke()
+
+        cr.set_source_rgba(0.96, 0.97, 1.0, 0.45)
+        right_aligned(cr, f"${int(frac * 100.0)}%d", LEFT - 10.0, y + 4.0)
+
+    cr.set_dash(dashes[0..<0], 0.0)
+
+    // ---- the bars ----
+
+    val n = labels.len
+    val slot = (RIGHT - LEFT) / real(n)
+    val bar = slot * 0.56
+
+    for i in 0..<n
+        val v = values[i]
+        val h = v * (BOTTOM - TOP)
+        val x = LEFT + real(i) * slot + (slot - bar) / 2.0
+        val y = BOTTOM - h
+
+        // Each bar is its own gradient, brighter at the top, so the eye follows the height.
+        var g = linear_pattern(0.0, y, 0.0, BOTTOM)
+
+        g.add_color_stop_rgb(0.0, 0.35, 0.78, 0.98)
+        g.add_color_stop_rgb(1.0, 0.20, 0.38, 0.85)
+
+        rounded_rect(cr, x, y, bar, h, 5.0)
+        cr.set_source(g)
+        cr.fill()
+        g.destroy()
+
+        cr.set_source_rgba(0.96, 0.97, 1.0, 0.85)
+        cr.set_font_size(11.0)
+        centred(cr, labels[i], x + bar / 2.0, BOTTOM + 18.0)
+
+        cr.set_source_rgba(0.96, 0.97, 1.0, 0.55)
+        cr.set_font_size(10.0)
+        centred(cr, f"${int(v * 100.0)}%d", x + bar / 2.0, y - 7.0)
+
+    // ---- the baseline ----
+
+    cr.set_source_rgba(1.0, 1.0, 1.0, 0.35)
+    cr.set_line_width(1.5)
+    cr.move_to(LEFT, BOTTOM)
+    cr.line_to(RIGHT, BOTTOM)
+    cr.stroke()
+
+    // ---- a badge in the corner: a clip, a transform and text on a circle ----
+    //
+    // Every mark here is made inside one `save`/`restore`, so the transform and the clip it sets up
+    // are gone by the time this returns and nothing above had to know about them.
+
+    cr.save()
+    cr.translate(WIDTH - 72.0, 62.0)
+
+    var glow = radial_pattern(-8.0, -10.0, 4.0, 0.0, 0.0, 34.0)
+
+    glow.add_color_stop_rgb(0.0, 0.99, 0.82, 0.42)
+    glow.add_color_stop_rgb(1.0, 0.90, 0.44, 0.22)
+
+    cr.arc(0.0, 0.0, 30.0, 0.0, 2.0 * pi)
+    cr.set_source(glow)
+    cr.fill_preserve()
+    cr.clip()
+
+    // Inside the clip: stripes drawn at an angle, which the circle cuts to shape. They are wider
+    // than the badge on purpose — the clip is what makes them round.
+    cr.rotate(-pi / 6.0)
+    cr.set_source_rgba(1.0, 1.0, 1.0, 0.16)
+
+    for i in 0..<9
+        cr.rectangle(-40.0 + real(i) * 9.0, -50.0, 4.0, 100.0)
+
+    cr.fill()
+    cr.restore()
+    glow.destroy()
+
+    cr.select_font_face("sans", FONT_SLANT_NORMAL, FONT_WEIGHT_BOLD)
+    cr.set_font_size(15.0)
+    cr.set_source_rgb(0.16, 0.12, 0.06)
+    centred(cr, "sysl", WIDTH - 72.0, 68.0)
+end draw
+
+// Draw onto a surface and say whether it worked, which every one of the four does the same way.
+render(s: Surface, what: string) -> Result[unit, string]
+    var surface = s
+
+    if !surface.ok()
+        return Err(f"the $what%s surface could not be made: ${surface.status()}%s")
+
+    var cr = context(surface)
+
+    draw(cr)
+
+    val st = cr.status()
+
+    cr.destroy()
+    surface.finish()
+    surface.destroy()
+
+    if st.ok() then Ok(()) else Err(f"drawing the $what%s went wrong: $st%s")
+end render
+
+main(args: []string) -> Result[unit, string]
+    // A basename, so the demo can be told to write somewhere else.
+    val base = if args.len > 1 then args[1] else "cairo-demo"
+
+    print(f"cairo ${version()}%s")
+
+    render(image_surface(FORMAT_ARGB32, int(WIDTH), int(HEIGHT)), "image")?
+
+    // The PNG is the one that has to be asked for: the other three are files from the start, while
+    // an image surface is pixels until somebody writes them out.
+    var png = image_surface(FORMAT_ARGB32, int(WIDTH), int(HEIGHT))
+    var cr = context(png)
+
+    draw(cr)
+    cr.destroy()
+
+    val name = f"$base%s.png"
+    val st = png.write_png(name)
+
+    png.destroy()
+
+    if !st.ok()
+        return Err(f"writing $name%s went wrong: $st%s")
+
+    print(f"  wrote $name%s")
+
+    // In points, at 72 to the inch — so the same 640 by 400 drawing is a card about nine inches
+    // wide. Nothing in `draw` changes to make that true.
+    render(pdf_surface(f"$base%s.pdf", WIDTH, HEIGHT), "PDF")?
+    print(f"  wrote $base%s.pdf")
+
+    render(svg_surface(f"$base%s.svg", WIDTH, HEIGHT), "SVG")?
+    print(f"  wrote $base%s.svg")
+
+    render(ps_surface(f"$base%s.ps", WIDTH, HEIGHT), "PostScript")?
+    print(f"  wrote $base%s.ps")
+
+    Ok(())
+end main
