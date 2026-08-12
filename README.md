@@ -29,7 +29,7 @@ The picture above is `cairo-demo.png`. Open `cairo-demo.pdf` beside it and they 
 drawing: the PNG has pixels in it and the PDF has curves, gradients and real text you can select.
 
 ```sysl
-render(image_surface(FORMAT_ARGB32, 640, 400), "image")?
+render(image_surface(Format.Argb32, 640, 400), "image")?
 render(pdf_surface("out.pdf", WIDTH, HEIGHT), "PDF")?
 render(svg_surface("out.svg", WIDTH, HEIGHT), "SVG")?
 render(ps_surface("out.ps", WIDTH, HEIGHT), "PostScript")?

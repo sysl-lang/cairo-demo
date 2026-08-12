@@ -22,7 +22,7 @@ const TOP: real = 110.0
 const BOTTOM: real = 330.0
 
 // Put `text` down with its centre at `x`, rather than its left edge.
-centred(cr: Context, text: string, x: real, y: real)
+centred(cr: &Context, text: string, x: real, y: real)
     var c = cr
     val e = c.text_extents(text)
 
@@ -31,7 +31,7 @@ centred(cr: Context, text: string, x: real, y: real)
 end centred
 
 // Put `text` down with its right edge at `x`.
-right_aligned(cr: Context, text: string, x: real, y: real)
+right_aligned(cr: &Context, text: string, x: real, y: real)
     var c = cr
     val e = c.text_extents(text)
 
@@ -40,7 +40,7 @@ right_aligned(cr: Context, text: string, x: real, y: real)
 end right_aligned
 
 // A rectangle whose corners are rounded by `r`, added to the current path.
-rounded_rect(cr: Context, x: real, y: real, w: real, h: real, r: real)
+rounded_rect(cr: &Context, x: real, y: real, w: real, h: real, r: real)
     var c = cr
     val half = pi / 2.0
 
@@ -57,7 +57,7 @@ end rounded_rect
 //
 // The context is copied into a `var` because the methods that change it take `*self`; a `Context` is
 // one pointer wide, so the copy is free and both names refer to the same drawing state.
-draw(context_in: Context)
+draw(context_in: &Context)
     var cr = context_in
 
     // What is being drawn. A demo with data in it is a demo somebody can read. These are `val`s in
@@ -74,7 +74,6 @@ draw(context_in: Context)
 
     cr.set_source(sky)
     cr.paint()
-    sky.destroy()
 
     // ---- a card to draw the chart on, with rounded corners and a soft edge ----
 
@@ -87,13 +86,13 @@ draw(context_in: Context)
 
     // ---- the words ----
 
-    cr.select_font_face("sans", FONT_SLANT_NORMAL, FONT_WEIGHT_BOLD)
+    cr.select_font_face("sans", FontSlant.Normal, FontWeight.Bold)
     cr.set_font_size(26.0)
     cr.set_source_rgb(0.96, 0.97, 1.0)
     cr.move_to(LEFT - 22.0, 62.0)
     cr.show_text("One drawing, four backends")
 
-    cr.select_font_face("sans", FONT_SLANT_ITALIC, FONT_WEIGHT_NORMAL)
+    cr.select_font_face("sans", FontSlant.Italic, FontWeight.Normal)
     cr.set_font_size(13.0)
     cr.set_source_rgba(0.96, 0.97, 1.0, 0.6)
     cr.move_to(LEFT - 22.0, 84.0)
@@ -105,7 +104,7 @@ draw(context_in: Context)
 
     cr.set_dash(dashes[0..<2], 0.0)
     cr.set_line_width(1.0)
-    cr.select_font_face("sans", FONT_SLANT_NORMAL, FONT_WEIGHT_NORMAL)
+    cr.select_font_face("sans", FontSlant.Normal, FontWeight.Normal)
     cr.set_font_size(11.0)
 
     for i in 0..<5
@@ -143,7 +142,6 @@ draw(context_in: Context)
         rounded_rect(cr, x, y, bar, h, 5.0)
         cr.set_source(g)
         cr.fill()
-        g.destroy()
 
         cr.set_source_rgba(0.96, 0.97, 1.0, 0.85)
         cr.set_font_size(11.0)
@@ -189,16 +187,15 @@ draw(context_in: Context)
 
     cr.fill()
     cr.restore()
-    glow.destroy()
 
-    cr.select_font_face("sans", FONT_SLANT_NORMAL, FONT_WEIGHT_BOLD)
+    cr.select_font_face("sans", FontSlant.Normal, FontWeight.Bold)
     cr.set_font_size(15.0)
     cr.set_source_rgb(0.16, 0.12, 0.06)
     centred(cr, "sysl", WIDTH - 72.0, 68.0)
 end draw
 
 // Draw onto a surface and say whether it worked, which every one of the four does the same way.
-render(s: Surface, what: string) -> Result[unit, string]
+render(s: &Surface, what: string) -> Result[unit, string]
     var surface = s
 
     if !surface.ok()
@@ -210,9 +207,7 @@ render(s: Surface, what: string) -> Result[unit, string]
 
     val st = cr.status()
 
-    cr.destroy()
     surface.finish()
-    surface.destroy()
 
     if st.ok() then Ok(()) else Err(f"drawing the $what%s went wrong: $st%s")
 end render
@@ -223,20 +218,18 @@ main(args: []string) -> Result[unit, string]
 
     print(f"cairo ${version()}%s")
 
-    render(image_surface(FORMAT_ARGB32, int(WIDTH), int(HEIGHT)), "image")?
+    render(image_surface(Format.Argb32, int(WIDTH), int(HEIGHT)), "image")?
 
     // The PNG is the one that has to be asked for: the other three are files from the start, while
     // an image surface is pixels until somebody writes them out.
-    var png = image_surface(FORMAT_ARGB32, int(WIDTH), int(HEIGHT))
+    var png = image_surface(Format.Argb32, int(WIDTH), int(HEIGHT))
     var cr = context(png)
 
     draw(cr)
-    cr.destroy()
 
     val name = f"$base%s.png"
     val st = png.write_png(name)
 
-    png.destroy()
 
     if !st.ok()
         return Err(f"writing $name%s went wrong: $st%s")
