@@ -14,5 +14,5 @@ dependencies {
 
 requires {
   os    = true
-  alloc = true
+  heap  = true
 }
