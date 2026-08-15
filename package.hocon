@@ -9,7 +9,7 @@ package {
 }
 
 dependencies {
-  cairo { git = "github.com/sysl-lang/cairo", version = "0.3.1" }
+  cairo { git = "github.com/sysl-lang/cairo", version = "0.3.2" }
 }
 
 requires {

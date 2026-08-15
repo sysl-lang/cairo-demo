@@ -7,7 +7,7 @@ The worked example for [**cairo**](https://github.com/sysl-lang/cairo) — one d
 
 ```
 brew install cairo
-sysl run . --link-path /opt/homebrew/lib --include-path cairo=/opt/homebrew/include/cairo
+sysl run .
 ```
 
 ```
